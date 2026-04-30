@@ -1,36 +1,132 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InkMotion
 
-## Getting Started
+AI-powered graffiti lettering and whiteboard animation platform. Converts plain text into stylized typography, layered vector assets, and animation-ready outputs.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+inkmotion-web/          ← Next.js frontend (Vercel)
+  src/
+    app/                ← App Router pages
+    components/         ← UI components
+    hooks/              ← useGeneration, useExport
+    lib/                ← API client, constants
+    types/              ← Shared TypeScript types
+
+backend/                ← FastAPI backend (Render)
+  app/
+    routes/             ← /health, /generate, /export/*
+    services/           ← generation, svg_composer, stroke_planner, export
+    schemas/            ← Pydantic request/response models
+    config.py           ← Settings via pydantic-settings
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js 16, TypeScript, Tailwind CSS v4 |
+| Backend | FastAPI, Python 3.11+, Pydantic v2 |
+| Database / Auth | Supabase (project save/load — post-MVP) |
+| Frontend deploy | Vercel |
+| Backend deploy | Render |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Style Presets
 
-## Learn More
+- **Gloss Black Drip** — high-contrast black with gloss highlights and paint drips
+- **Marker Bubble** — fat rounded letters with marker fill and thick outline
+- **Club Red Yellow** — bold red and yellow with chrome-style depth
+- **Clean Sticker** — flat color with white border, sticker-ready
 
-To learn more about Next.js, take a look at the following resources:
+## Local Development
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Frontend
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+cp .env.example .env.local
+npm install
+npm run dev
+```
 
-## Deploy on Vercel
+Runs at `http://localhost:3000`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Backend
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload
+```
+
+Runs at `http://localhost:8000`. API docs at `/docs`.
+
+## Environment Variables
+
+### Frontend (`.env.local`)
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | Backend base URL |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (post-MVP) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (post-MVP) |
+
+### Backend (`.env`)
+
+| Variable | Description |
+|---|---|
+| `CORS_ORIGINS` | Comma-separated allowed origins |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
+
+## API
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Health check |
+| POST | `/generate` | Generate typography from text + preset |
+| POST | `/export/svg` | Export as SVG string |
+| POST | `/export/png` | Export as base64 PNG (2× resolution) |
+| POST | `/export/json` | Export stroke data as JSON |
+
+## Deployment
+
+### Vercel (frontend)
+
+1. Connect the repo to Vercel
+2. Set `NEXT_PUBLIC_API_URL` to your Render backend URL
+3. Deploy — no build config needed, Next.js is auto-detected
+
+### Render (backend)
+
+1. Create a new **Web Service** pointing to `backend/`
+2. Build command: `pip install -r requirements.txt`
+3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Add env vars from `backend/.env.example`
+
+A `render.yaml` is included for infrastructure-as-code deploys.
+
+## Data Models
+
+### `projects`
+```sql
+id          uuid primary key
+user_id     uuid references auth.users
+text        text
+preset      text
+config_json jsonb
+output_json jsonb
+created_at  timestamptz default now()
+```
+
+### `exports`
+```sql
+id          uuid primary key
+project_id  uuid references projects
+type        text  -- svg | png | json
+url         text
+created_at  timestamptz default now()
+```
